@@ -8,9 +8,8 @@ function App() {
 
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [editorTitle, setEditorTitle] = useState("");
-  const [editorContent, setEditorContent] = useState("");
+  const [blocks, setBlocks] = useState([]);
 
-  // Get documents from backend
   useEffect(() => {
     fetch("http://localhost:5000/api/documents")
       .then((response) => response.json())
@@ -22,28 +21,31 @@ function App() {
       });
   }, []);
 
-  // Create a new document
   const createDocument = async () => {
     if (documentName.trim() === "") {
       return;
     }
 
     try {
-      const response = await fetch("http://localhost:5000/api/documents", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: documentName,
-          nodes: [
-            {
-              type: "paragraph",
-              content: "",
-            },
-          ],
-        }),
-      });
+      const response = await fetch(
+        "http://localhost:5000/api/documents",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: documentName,
+            nodes: [
+              {
+                type: "paragraph",
+                content: "",
+                children: [],
+              },
+            ],
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to create document");
@@ -59,19 +61,68 @@ function App() {
     }
   };
 
-  // Open document in editor
   const openDocument = (document) => {
     setSelectedDocument(document);
     setEditorTitle(document.title);
 
-    const firstParagraph = document.nodes?.find(
-      (node) => node.type === "paragraph"
-    );
-
-    setEditorContent(firstParagraph?.content || "");
+    if (document.nodes && document.nodes.length > 0) {
+      setBlocks(document.nodes);
+    } else {
+      setBlocks([
+        {
+          type: "paragraph",
+          content: "",
+          children: [],
+        },
+      ]);
+    }
   };
 
-  // Update document
+  const updateBlock = (index, value) => {
+    const updatedBlocks = [...blocks];
+
+    updatedBlocks[index] = {
+      ...updatedBlocks[index],
+      content: value,
+    };
+
+    setBlocks(updatedBlocks);
+  };
+
+  const changeBlockType = (index, type) => {
+    const updatedBlocks = [...blocks];
+
+    updatedBlocks[index] = {
+      ...updatedBlocks[index],
+      type: type,
+    };
+
+    setBlocks(updatedBlocks);
+  };
+
+  const addBlock = () => {
+    setBlocks([
+      ...blocks,
+      {
+        type: "paragraph",
+        content: "",
+        children: [],
+      },
+    ]);
+  };
+
+  const deleteBlock = (index) => {
+    if (blocks.length === 1) {
+      return;
+    }
+
+    const updatedBlocks = blocks.filter(
+      (_, blockIndex) => blockIndex !== index
+    );
+
+    setBlocks(updatedBlocks);
+  };
+
   const updateDocument = async () => {
     if (!selectedDocument) {
       return;
@@ -87,12 +138,7 @@ function App() {
           },
           body: JSON.stringify({
             title: editorTitle,
-            nodes: [
-              {
-                type: "paragraph",
-                content: editorContent,
-              },
-            ],
+            nodes: blocks,
           }),
         }
       );
@@ -120,7 +166,6 @@ function App() {
     }
   };
 
-  // Delete document
   const deleteDocument = async (documentId) => {
     const confirmDelete = window.confirm(
       "Are you sure you want to delete this document?"
@@ -143,7 +188,9 @@ function App() {
       }
 
       setDocuments(
-        documents.filter((document) => document._id !== documentId)
+        documents.filter(
+          (document) => document._id !== documentId
+        )
       );
 
       if (selectedDocument?._id === documentId) {
@@ -159,7 +206,6 @@ function App() {
 
   return (
     <div className="app">
-
       <header className="header">
         <div>
           <div className="logo">SyncDoc</div>
@@ -178,25 +224,24 @@ function App() {
       </header>
 
       <main className="main">
-
         <h1 className="page-title">
           My Documents
         </h1>
 
         {showForm && (
           <div className="create-form">
-
             <h2>Create New Document</h2>
 
             <input
               type="text"
               placeholder="Enter document name"
               value={documentName}
-              onChange={(e) => setDocumentName(e.target.value)}
+              onChange={(e) =>
+                setDocumentName(e.target.value)
+              }
             />
 
             <div className="form-buttons">
-
               <button
                 className="create-button"
                 onClick={createDocument}
@@ -213,14 +258,11 @@ function App() {
               >
                 Cancel
               </button>
-
             </div>
-
           </div>
         )}
 
         <div className="documents">
-
           {documents.map((document) => (
             <div
               className="document-card"
@@ -234,49 +276,110 @@ function App() {
                   📄
                 </div>
 
-                <h3>
-                  {document.title}
-                </h3>
+                <h3>{document.title}</h3>
 
                 <p>
                   Last edited:{" "}
-                  {new Date(document.updatedAt).toLocaleString()}
+                  {new Date(
+                    document.updatedAt
+                  ).toLocaleString()}
                 </p>
               </div>
 
               <button
                 className="delete-button"
-                onClick={() => deleteDocument(document._id)}
+                onClick={() =>
+                  deleteDocument(document._id)
+                }
               >
                 Delete
               </button>
-
             </div>
           ))}
-
         </div>
 
         {selectedDocument && (
           <div className="editor">
-
             <h2>Edit Document</h2>
 
             <input
               type="text"
               value={editorTitle}
-              onChange={(e) => setEditorTitle(e.target.value)}
+              onChange={(e) =>
+                setEditorTitle(e.target.value)
+              }
               placeholder="Document title"
             />
 
-            <textarea
-              value={editorContent}
-              onChange={(e) => setEditorContent(e.target.value)}
-              placeholder="Write your document content..."
-              rows="10"
-            />
+            <div className="blocks">
+              {blocks.map((block, index) => (
+                <div
+                  className="block"
+                  key={index}
+                >
+                  <div className="block-toolbar">
+                    <select
+                      value={block.type}
+                      onChange={(e) =>
+                        changeBlockType(
+                          index,
+                          e.target.value
+                        )
+                      }
+                    >
+                      <option value="paragraph">
+                        Paragraph
+                      </option>
+
+                      <option value="heading">
+                        Heading
+                      </option>
+
+                      <option value="code">
+                        Code
+                      </option>
+
+                      <option value="list">
+                        List
+                      </option>
+
+                      <option value="listItem">
+                        List Item
+                      </option>
+                    </select>
+
+                    <button
+                      className="block-delete"
+                      onClick={() =>
+                        deleteBlock(index)
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <textarea
+                    value={block.content}
+                    onChange={(e) =>
+                      updateBlock(
+                        index,
+                        e.target.value
+                      )
+                    }
+                    placeholder={`Write ${block.type} content...`}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <button
+              className="add-block-button"
+              onClick={addBlock}
+            >
+              + Add Block
+            </button>
 
             <div className="form-buttons">
-
               <button
                 className="create-button"
                 onClick={updateDocument}
@@ -286,18 +389,16 @@ function App() {
 
               <button
                 className="cancel-button"
-                onClick={() => setSelectedDocument(null)}
+                onClick={() =>
+                  setSelectedDocument(null)
+                }
               >
                 Close
               </button>
-
             </div>
-
           </div>
         )}
-
       </main>
-
     </div>
   );
 }
